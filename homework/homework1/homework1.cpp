@@ -667,11 +667,13 @@ public:
 		}
 	}
 
+	//获取节点变换矩阵
 	glm::mat4 localMatrix(Node &node) 
 	{
 		return glm::translate(glm::mat4(1.0f),node.translation) * glm::mat4(node.rotation) * glm::scale(glm::mat4(1.0f),node.scale) * node.matrix; 
 	}
 
+	//获取变换矩阵，子节点递归
 	glm::mat4 getMatrix(Node &node) 
 	{
 		glm::mat4 m = localMatrix(node);
@@ -686,11 +688,15 @@ public:
 
 	void update(Node &node)
 	{
-		glm::mat4 m = getMatrix(node);
-		//取出计算后的变换矩阵
-		for(auto& child : node.children)
+		//判断节点网格是否存在
+		if(&(node.mesh))
 		{
-			update(*child);
+			glm::mat4 m = getMatrix(node);
+			//取出计算后的变换矩阵
+			for(auto& child : node.children)
+			{
+				update(*child);
+			}
 		}
 	}
 };
