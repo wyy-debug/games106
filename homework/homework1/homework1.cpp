@@ -74,6 +74,15 @@ public:
 	// 包含节点的（可选）geometry几何形状，并且可以由任意数量的图元组成
 	struct Mesh {
 		std::vector<Primitive> primitives;
+		struct UniformBuffer 
+		{
+			VkBuffer buffer;
+			VkDeviceMemory memory;
+			VkDescriptorBufferInfo descriptor;
+			VkDescriptorSet descriptorSet;
+			void* mapped;
+		}
+		uniformBuffer;
 	};
 
 	// A node represents an object in the glTF scene graph
@@ -87,6 +96,7 @@ public:
 		glm::quat rotation{};
 		Mesh mesh;
 		glm::mat4 matrix;
+		glm::mat4 transfromMatrix{1.0f};
 		~Node() {
 			for (auto& child : children) {
 				delete child;
@@ -260,14 +270,14 @@ public:
 		// 获取局部节点矩阵
 		// 它由平移、旋转、缩放或 4x4 矩阵组成
 		if (inputNode.translation.size() == 3) {
-			node->matrix = glm::translate(node->matrix, glm::vec3(glm::make_vec3(inputNode.translation.data())));
+			node->translation = glm::make_vec3(inputNode.translation.data());
 		}
 		if (inputNode.rotation.size() == 4) {
 			glm::quat q = glm::make_quat(inputNode.rotation.data());
-			node->matrix *= glm::mat4(q);
+			node->rotation = glm::mat4(q);
 		}
 		if (inputNode.scale.size() == 3) {
-			node->matrix = glm::scale(node->matrix, glm::vec3(glm::make_vec3(inputNode.scale.data())));
+			node->scale = glm::vec3(glm::make_vec3(inputNode.scale.data()));
 		}
 		if (inputNode.matrix.size() == 16) {
 			node->matrix = glm::make_mat4x4(inputNode.matrix.data());
@@ -496,6 +506,10 @@ public:
 				{
 					channel.path = AnimationChannel::PathType::SCALE;
 				}
+				if (source.target_path == "weights") {
+					std::cout << "weights not yet supported, skipping channel" << std::endl;
+					continue;
+				}
 				channel.samplerIndex = source.sampler;
 				channel.node = nodeFromIndex(source.target_node);
 				if(!channel.node)
@@ -562,6 +576,7 @@ public:
 			// Pass the final matrix to the vertex shader using push constants
 			// 使用推送常量将最终矩阵传递给顶点着色
 			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &nodeMatrix);
+			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 64, sizeof(glm::mat4), &(node->transfromMatrix));
 			for (VulkanglTFModel::Primitive& primitive : node->mesh.primitives) {
 				if (primitive.indexCount > 0) {
 					// Get the texture index for this primitive
@@ -618,16 +633,16 @@ public:
 			
 			for(size_t i = 0; i< sampler.inputs.size() -1 ; i++)
 			{
-				if((time>=sampler.inputs[i])&&(time<=sampler.inputs[i+1]))
+				if ((time >= sampler.inputs[i]) && (time <= sampler.inputs[i + 1]))
 				{
-					float u = std::max(0.0f, time- sampler.inputs[i]) / (sampler.inputs[i+1]-sampler.inputs[i]);
+					float u = std::max(0.0f, time - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
 					if(u <= 1.0f)
 					{
 						switch(channel.path)
 						{
 							case AnimationChannel::PathType::TRANSLATION :
 							{
-								glm::vec4 trans = glm::mix(sampler.outputsVec4[i],sampler.outputsVec4[i+1],u);
+								glm::vec4 trans = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], u);
 								channel.node->translation = glm::vec3(trans);
 								break;
 							}
@@ -660,43 +675,45 @@ public:
 		}
 		if (updated)
 		{
-			for (auto &node : nodes)
+			for (auto node : nodes)
 			{
-				update(*node);
+				update(node);
 			}
 		}
 	}
 
 	//获取节点变换矩阵
-	glm::mat4 localMatrix(Node &node) 
+	glm::mat4 localMatrix(Node *node) 
 	{
-		return glm::translate(glm::mat4(1.0f),node.translation) * glm::mat4(node.rotation) * glm::scale(glm::mat4(1.0f),node.scale) * node.matrix; 
+		return glm::translate(glm::mat4(1.0f),node->translation) * glm::mat4(node->rotation) * glm::scale(glm::mat4(1.0f), node->scale) * node->matrix;
 	}
 
 	//获取变换矩阵，子节点递归
-	glm::mat4 getMatrix(Node &node) 
+	glm::mat4 getMatrix(Node *node) 
 	{
 		glm::mat4 m = localMatrix(node);
-		Node *p = node.parent;
+		Node *p = node->parent;
 		while (p) 
 		{
-			m = localMatrix(*p) * m;
+			m = localMatrix(p) * m;
 			p = p->parent;
 		}
 		return m;
 	}
 
-	void update(Node &node)
+	void update(Node *node)
 	{
 		//判断节点网格是否存在
-		if(&(node.mesh))
+		if(&(node->mesh))
 		{
 			glm::mat4 m = getMatrix(node);
+			node->transfromMatrix = m;
 			//取出计算后的变换矩阵
-			for(auto& child : node.children)
-			{
-				update(*child);
-			}
+		}
+
+		for(auto child : node->children)
+		{
+			update(child);
 		}
 	}
 };
@@ -839,7 +856,11 @@ public:
 				const tinygltf::Node node = glTFInput.nodes[scene.nodes[i]];
 				glTFModel.loadNode(node, scene.nodes[i], glTFInput, nullptr, indexBuffer, vertexBuffer);
 			}
-			glTFModel.loadAnimations(glTFInput);
+			if(glTFInput.animations.size () >0)
+			{
+				glTFModel.loadAnimations(glTFInput);
+			}
+			
 		}
 		else {
 			vks::tools::exitFatal("Could not open the glTF file.\n\nThe file is part of the additional asset pack.\n\nRun \"download_assets.py\" in the repository root to download the latest version.", -1);
@@ -966,7 +987,8 @@ public:
 		VkPipelineLayoutCreateInfo pipelineLayoutCI= vks::initializers::pipelineLayoutCreateInfo(setLayouts.data(), static_cast<uint32_t>(setLayouts.size()));
 		// We will use push constants to push the local matrices of a primitive to the vertex shader
 		// 我们将使用推送常量将基元的局部矩阵推送到顶点着色器
-		VkPushConstantRange pushConstantRange = vks::initializers::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), 0);
+		
+		VkPushConstantRange pushConstantRange = vks::initializers::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 2 * sizeof(glm::mat4), 0);
 		// Push constant ranges are part of the pipeline layout
 		// 推送常量范围是管道布局的一部分
 		pipelineLayoutCI.pushConstantRangeCount = 1;
@@ -1090,12 +1112,14 @@ public:
 		if (camera.updated) {
 			updateUniformBuffers();
 		}
-		animationTimer += frameTimer;
-		if (animationTimer > glTFModel.animations[animationIndex].end) {
-			animationTimer -= glTFModel.animations[animationIndex].end;
+		if (glTFModel.animations.size() > 0) {
+			animationTimer += frameTimer;
+			if (animationTimer > glTFModel.animations[animationIndex].end) {
+				animationTimer -= glTFModel.animations[animationIndex].end;
+			}
+			glTFModel.updateAnimation(animationIndex, animationTimer);
+			buildCommandBuffers();
 		}
-		glTFModel.updateAnimation(animationIndex, animationTimer);
-
 	}
 
 	virtual void viewChanged()
