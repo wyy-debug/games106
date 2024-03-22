@@ -575,8 +575,9 @@ public:
 			}
 			// Pass the final matrix to the vertex shader using push constants
 			// 使用推送常量将最终矩阵传递给顶点着色
+			nodeMatrix *= node->transfromMatrix;
 			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &nodeMatrix);
-			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 64, sizeof(glm::mat4), &(node->transfromMatrix));
+			//vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 64, sizeof(glm::mat4), &(node->transfromMatrix));
 			for (VulkanglTFModel::Primitive& primitive : node->mesh.primitives) {
 				if (primitive.indexCount > 0) {
 					// Get the texture index for this primitive

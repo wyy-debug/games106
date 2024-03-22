@@ -15,7 +15,7 @@ layout (set = 0, binding = 0) uniform UBOScene
 
 layout(push_constant) uniform PushConsts {
 	mat4 model;
-	mat4 transfromModel;
+	//mat4 transfromModel;
 } primitive;
 
 layout (location = 0) out vec3 outNormal;
@@ -30,7 +30,8 @@ void main()
 	outColor = inColor;
 	outUV = inUV;
 	vec4 locPos;
-	locPos = primitive.model *primitive.transfromModel * vec4(inPos, 1.0);
+	//locPos = primitive.model *primitive.transfromModel * vec4(inPos, 1.0);
+	locPos = primitive.model * vec4(inPos, 1.0);
 	gl_Position = uboScene.projection * uboScene.view * vec4(locPos.xyz, 1.0);
 	
 	vec4 pos = uboScene.view * vec4(inPos, 1.0);
