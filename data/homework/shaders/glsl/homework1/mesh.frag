@@ -118,6 +118,15 @@ vec4 SRGBtoLINEAR(vec4 srgbIn)
 
 vec3 getNormal()
 {
+	// TBN 切线空间
+
+	// 从法线贴图范围[0,1]获取法线
+	// 将法线向量转化为[-1,1]
+	// TBN
+	// T = normalize(dx(inworldPos) * dx(inUV0).t - dy(inworldPos) * dx(inUV1).t)
+	// dx(inworldPos) = T * dx(inUV0).x + B * dx(inUV0).y
+	// dy(inworldPos) = T * dy(inUV1).x + B * dy(inUV1).y
+
 	vec3 tangentNormal = texture(normalMap, material.normalTextureSet = 0 ?  inUV0 : inUV1).xyz * 2.0 - 1.0;
 	vec3 q1 = dFdx(inWorldPos);
 	vec3 q2 = dFdy(inWorldPos);
@@ -126,11 +135,13 @@ vec3 getNormal()
 
 	vec3 N = normalize(inNormal);
 	vec3 T = normalize(q1 * st2.t - q2 * st1.t);
+	vec3 B = -normalize(cross(N, T));
 	vec3 TBN = mat3(T,B,N);
 
 	return normalize(TBN * tangentNormal);
 }
 
+// 获取IBL环境光贡献
 vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
 {
 	float lod = (pbrInputs.perceptualRoughness * uboParams.prefilteredCubeMipLevels);
@@ -148,16 +159,20 @@ vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
 	return diffuse + specular;
 }
 
+// 漫反射 c/Pi
 vec3 diffuse(PBRInfo pbrInputs)
 {
 	return pbrInputs.diffuseColor / M_PI;
 }
 
+// 菲涅尔项 
+// F0+(F90-F0) * pow(clamp(1- vdoth) , 5.0)
 vec3 specularReflection(PBRInfo pbrInputs)
 {
 	return pbrInputs.reflectance0 + (pbrInputs.reflectance90 - pbrInputs.reflectance0) * pow(clamp(1.0 - pbrInputs.VdotH, 0.0, 1.0), 5.0);
 }
-
+// 自遮挡
+// dot(n,l) / dot(n,l) + (r2)
 float geometericOcclusion(PBRInfo pbrInputs)
 {
 	float NdotL = pbrInputs.NdotL;
@@ -169,6 +184,8 @@ float geometericOcclusion(PBRInfo pbrInputs)
 	return attenuationL * attenuationV;
 }
 
+// 法线分布函数
+// pow(roughnessSq) / (M_PI * pow( pow(NdotH) * (pow(roughnessSq) - 1)) + 1)
 float microfacetDistribution(PBRInfo pbrInputs)
 {
 	float roughnessSq = pbrInputs.alphaRoughenss * pbrInputs.alphaRoughenss;
