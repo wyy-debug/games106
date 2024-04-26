@@ -183,6 +183,8 @@ public:
 		bool vsync = false;
 		/** @brief Enable UI overlay */
 		bool overlay = true;
+		bool multiSampling = true;
+		VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_4_BIT;
 	} settings;
 
 	VkClearColorValue defaultClearColor = { { 0.025f, 0.025f, 0.025f, 1.0f } };

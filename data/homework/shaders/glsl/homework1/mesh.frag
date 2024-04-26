@@ -28,9 +28,9 @@ layout (set = 0 ,binding = 1) uniform UBOParams
 	float scaleIBLAmbient;
 } uboParams;
 
-layout (set = 0, binding = 2) uniform samplerCube samplerIrradiance;
-layout (set = 0, binding = 3) uniform samplerCube prefilteredMap;
-layout (set = 0, binding = 4) uniform sampler2D samplerBRDFLUT;
+layout (set = 0, binding = 2) uniform samplerCube samplerIrradiance; //辐照度贴图
+layout (set = 0, binding = 3) uniform samplerCube prefilteredMap; //预滤波环境贴图
+layout (set = 0, binding = 4) uniform sampler2D samplerBRDFLUT;//BRDF查找贴图
 
 // Material bindings
 layout (set = 1, binding = 0) uniform sampler2D colorMap;
@@ -77,8 +77,8 @@ struct PBRInfo
 const float M_PI = 3.141592653589793;
 const float c_MinRoughness = 0.04;
 
-const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0;
-const float PBR_WORKFLOW_SPECILAR_GLOSINESS = 1.0f;
+const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0; //金属粗糙度
+const float PBR_WORKFLOW_SPECILAR_GLOSINESS = 1.0f;//镜面光泽度
 
 #define MANUAL_SRGB 1
 
@@ -94,6 +94,7 @@ vec3 Uncharted2ToneMap(vec3 color)
 	return ((color*(A*color+C*B)+D*E)/(color*(A*color+B)+D*F))-E/F;
 }
 
+// ACES tonemap 色调映射
 vec4 tonemap(vec4 color)
 {
 	vec3 outcol = Uncharted2ToneMap(color.rgb * uboParams.exposure);
@@ -101,6 +102,7 @@ vec4 tonemap(vec4 color)
 	return vec4(pow(outcol, vec3(1.0f / uboParams.gamma)), color.a);
 }
 
+//SRGB 颜色空间转换为线性空间。
 vec4 SRGBtoLINEAR(vec4 srgbIn)
 {
 	#ifdef MANUAL_SRGB
